@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conway's Game of Life with SIR Model</title>
+    <style>
+        /* Add your CSS here */
+        /* Style the grid container */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(10px, 1fr));
+            gap: 1px;
+            justify-content: center;
+            margin-top: 20px;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Style the cells */
+        .cell {
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            transition: background-color 0.3s;
+        }
+
+        .cell.alive {
+            background-color: #4CAF50;
+        }
+
+        .cell.infected {
+            background-color: red;
+        }
+
+        .cell.recovered {
+            background-color: darkgreen;
+        }
+
+        .cell.high-risk {
+            border: 2px solid orange;
+        }
+
+        /* Add any additional styles you need */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .input-container {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+
+        .input-container label {
+            margin-right: 5px;
+        }
+
+        .input-container input {
+            width: 50px;
+            padding: 5px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .population-container {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+
+        .population-container label {
+            font-weight: bold;
+        }
+
+        .population-container span {
+            margin-left: 5px;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conway's Game of Life with SIR Model</h1>
+    <!-- Create a container for the grid -->
+    <div class="button-container">
+        <div class="population-container">
+            <label for="populationCount">Population:</label>
+            <span id="populationCount">0</span>
+        </div>
+        <button id="startButton">Start</button>
+        <button id="stopButton">Stop</button>
+        <button id="resetButton">Reset</button>
+        <button id="sirToggleButton">SIR Model: infect 25%</button>
+        <div class="input-container">
+            <label for="alivePercentage">Alive %:</label>
+            <input type="number" id="alivePercentage" value="15" min="0" max="100">
+        </div>
+    </div>
+    <div class="button-container">
+        <div class="population-container">
+            <label for="susceptibleCount">Susceptible:</label>
+            <span id="susceptibleCount">0</span>
+        </div>
+        <div class="population-container">
+            <label for="infectedCount">Infected:</label>
+            <span id="infectedCount">0</span>
+        </div>
+        <div class="population-container">
+            <label for="recoveredCount">Recovered:</label>
+            <span id="recoveredCount">0</span>
+        </div>
+    </div>
+    <div class="grid-container" id="grid"></div>
+   
+
+    <script>
+        // Initialize the grid
+        const rows = 60;
+        const cols = 100;
+        const grid = [];
+        let sirModelEnabled = false;
+        const recoveryTime = 10; // Number of iterations before recovery
+        const highRiskRecoveryTime = 1; // Number of iterations before high-risk individuals die
+
+        function createGrid() {
+            const gridContainer = document.getElementById('grid');
+            gridContainer.style.gridTemplateColumns = `repeat(${cols}, 10px)`;
+
+            for (let row = 0; row < rows; row++) {
+                const rowArray = [];
+                for (let col = 0; col < cols; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.dataset.recoveryCounter = 0;
+                    gridContainer.appendChild(cell);
+                    rowArray.push(cell);
+                }
+                grid.push(rowArray);
+            }
+        }
+
+        createGrid();
+
+        function setupGrid() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = grid[row][col];
+                    cell.classList.remove('alive', 'infected', 'recovered', 'high-risk');
+                    cell.dataset.recoveryCounter = 0;
+                }
+            }
+        }
+
+        function randomizeGrid() {
+            const alivePercentage = document.getElementById('alivePercentage').value / 100;
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = grid[row][col];
+                    if (Math.random() < alivePercentage) {
+                        cell.classList.add('alive');
+                    } else {
+                        cell.classList.remove('alive');
+                    }
+                }
+            }
+        }
+
+        function updateGrid() {
+            const newGrid = grid.map(row => row.map(cell => {
+                if (cell.classList.contains('infected')) {
+                    return 'infected';
+                } else if (cell.classList.contains('recovered')) {
+                    return 'recovered';
+                } else if (cell.classList.contains('alive')) {
+                    return 'alive';
+                } else {
+                    return 'empty';
+                }
+            }));
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = grid[row][col];
+                    const aliveNeighbors = countAliveNeighbors(row, col);
+
+                    if (cell.classList.contains('alive') || cell.classList.contains('infected') || cell.classList.contains('recovered')) {
+                        if (aliveNeighbors < 2 || aliveNeighbors > 3) {
+                            newGrid[row][col] = 'empty';
+                        }
+                    } else {
+                        if (aliveNeighbors === 3) {
+                            newGrid[row][col] = 'alive';
+                        }
+                    }
+                }
+            }
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = grid[row][col];
+                    cell.classList.remove('alive', 'infected', 'recovered');
+                    if (newGrid[row][col] === 'alive') {
+                        cell.classList.add('alive');
+                    } else if (newGrid[row][col] === 'infected') {
+                        cell.classList.add('infected');
+                    } else if (newGrid[row][col] === 'recovered') {
+                        cell.classList.add('recovered');
+                    }
+                }
+            }
+        }
+
+        function countAliveNeighbors(row, col) {
+            let count = 0;
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    if (i === 0 && j === 0) continue;
+                    const newRow = row + i;
+                    const newCol = col + j;
+                    if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols) {
+                        if (grid[newRow][newCol].classList.contains('alive') || grid[newRow][newCol].classList.contains('infected') || grid[newRow][newCol].classList.contains('recovered')) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count;
+        }
+
+        let intervalId;
+        function startSimulation() {
+            resetCounts();
+            randomizeGrid();
+            if (!intervalId) {
+                intervalId = setInterval(() => {
+                    updateGrid();
+                    updatePopulationCount();
+                    if (sirModelEnabled) {
+                        spreadInfection();
+                        updateSIRCounts();
+                    }
+                }, 200);
+            }
+        }
+
+        function stopSimulation() {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+
+        function resetSimulation() {
+            stopSimulation();
+            setupGrid();
+            resetCounts();
+        }
+
+        function enableSIRModel() {
+            sirModelEnabled = true;
+            infectInitialPopulation();
+            updateSIRCounts();
+        }
+
+        function infectInitialPopulation() {
+            const aliveCells = grid.flat().filter(cell => cell.classList.contains('alive'));
+            const infectedCount = Math.floor(aliveCells.length * 0.25);
+            const highRiskCount = Math.floor(aliveCells.length * 0.05);
+            for (let i = 0; i < infectedCount; i++) {
+                const cell = aliveCells[Math.floor(Math.random() * aliveCells.length)];
+                cell.classList.remove('alive');
+                cell.classList.add('infected');
+                cell.dataset.recoveryCounter = recoveryTime;
+            }
+            for (let i = 0; i < highRiskCount; i++) {
+                const cell = aliveCells[Math.floor(Math.random() * aliveCells.length)];
+                cell.classList.add('high-risk');
+            }
+        }
+
+        function spreadInfection() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = grid[row][col];
+                    if (cell.classList.contains('infected')) {
+                        const neighbors = getNeighbors(row, col);
+                        neighbors.forEach(neighbor => {
+                            if (neighbor.classList.contains('alive')) {
+                                neighbor.classList.remove('alive');
+                                neighbor.classList.add('infected');
+                                neighbor.dataset.recoveryCounter = neighbor.classList.contains('high-risk') ? highRiskRecoveryTime : recoveryTime;
+                            }
+                        });
+                        cell.dataset.recoveryCounter--;
+                        if (cell.dataset.recoveryCounter <= 0) {
+                            if (cell.classList.contains('high-risk')) {
+                                cell.classList.remove('infected', 'high-risk');
+                            } else {
+                                cell.classList.remove('infected');
+                                cell.classList.add('recovered');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function getNeighbors(row, col) {
+            const neighbors = [];
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    if (i === 0 && j === 0) continue;
+                    const newRow = row + i;
+                    const newCol = col + j;
+                    if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols) {
+                        neighbors.push(grid[newRow][newCol]);
+                    }
+                }
+            }
+            return neighbors;
+        }
+
+        function updatePopulationCount() {
+            const populationCount = grid.flat().filter(cell => cell.classList.contains('alive')).length;
+            document.getElementById('populationCount').textContent = populationCount;
+        }
+
+        function updateSIRCounts() {
+            const susceptibleCount = grid.flat().filter(cell => cell.classList.contains('alive')).length;
+            const infectedCount = grid.flat().filter(cell => cell.classList.contains('infected')).length;
+            const recoveredCount = grid.flat().filter(cell => cell.classList.contains('recovered')).length;
+            document.getElementById('susceptibleCount').textContent = susceptibleCount;
+            document.getElementById('infectedCount').textContent = infectedCount;
+            document.getElementById('recoveredCount').textContent = recoveredCount;
+        }
+
+        function resetCounts() {
+            document.getElementById('susceptibleCount').textContent = 0;
+            document.getElementById('infectedCount').textContent = 0;
+            document.getElementById('recoveredCount').textContent = 0;
+        }
+
+        document.getElementById('startButton').addEventListener('click', startSimulation);
+        document.getElementById('stopButton').addEventListener('click', stopSimulation);
+        document.getElementById('resetButton').addEventListener('click', resetSimulation);
+        document.getElementById('sirToggleButton').addEventListener('click', enableSIRModel);
+    </script>
+</body>
+</html>
