@@ -1,2 +1,2 @@
 # GameofLifeSimulation-fun
-A web simulation of Conway's game of Life
+A web simulation of Conway's Game of Life with SIR Model
